@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # --- КОНФИГ ---
 API_ID = 30032542
 API_HASH = "ce646da1307fb452305d49f9bb8751ca"
-BOT_TOKEN = ('BOT_TOKEN', '8683043918:AAFd7vbh_2ROhCwcE2GcgIjg0XNyWwPL2kw')
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '8683043918:AAFd7vbh_2ROhCwcE2GcgIjg0XNyWwPL2kw')
 
 # === КРИТИЧЕСКИ ВАЖНО: ПРАВИЛЬНАЯ РАБОЧАЯ ДИРЕКТОРИЯ ДЛЯ RAILWAY ===
 # Определяем, где мы находимся
@@ -1266,5 +1266,4 @@ if __name__ == "__main__":
         loop.run_until_complete(shutdown())
     except Exception as e:
         logger.error(f"❌ Критическая ошибка: {e}")
-
         loop.run_until_complete(shutdown())
