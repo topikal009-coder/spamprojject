@@ -1,0 +1,5 @@
+pyrogram 
+asyncio
+aiogram
+python-dotenv
+requests
