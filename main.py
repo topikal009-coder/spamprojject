@@ -59,13 +59,15 @@ KEYS_FILE = os.path.join(WORK_DIR, 'activation_keys.json')
 def load_keys():
     """Загружает ключи из файла"""
     default_keys = {
-        "artem": "Пользователь 1",
+        "artem": "Администратор",
         "pryma": "Пользователь 2",
         "igor": "Пользователь 3", 
         "fbfs-sdfs-456d-h34k": "Пользователь 4",
-        "jhsd-j34k-dfyt-mh3l": "Пользователь 5", 
+        "jhsd-j34k-dfyt-mh3l": "Пользователь 5",
+        "fbgs-sdfs-d56d-g34k": "Пользователь 4",
+        "jhsd-hj4k-43yt-mh3l": "Пользователь 5", 
         "34gd-fgh5-hfg3-s37h": "Пользователь 6",
-        "ADMINKEY999": "Администратор",
+        "ADMIN": "Администратор",
     }
     
     try:
@@ -439,8 +441,7 @@ def get_user_main_keyboard(user_id):
             ["🛑 Стоп рассылки", "⚙️ Настройки текста"],
             ["⏱ Настройки интервала", "💾 Сохранить настройки"],
             ["📂 Загрузить настройки", "🔑 Управление ключами"],
-            ["👥 Все пользователи", "📊 Статистика"],
-            ["🔗 Привязать ключ к юзеру"]
+            ["👥 Все пользователи", "📊 Статистика"]
         ], resize_keyboard=True)
     else:
         return ReplyKeyboardMarkup([
@@ -585,52 +586,11 @@ async def start(c, m):
             reply_markup=get_user_main_keyboard(user_id)
         )
     else:
-        await m.reply(
-            "🔐 Доступ ограничен\n\n"
-            "Для использования бота введите одноразовый ключ доступа.\n"
-            "Ключ можно ввести в формате:\n"
-            "• обычный ключ: KEY123\n"
-            "• привязанный ключ: KEY123-@username\n\n"
-            "Нажмите кнопку ниже чтобы ввести ключ.",
-            reply_markup=ReplyKeyboardMarkup([["🔑 Ввести ключ доступа"]], resize_keyboard=True)
-        )
-
-@bot.on_message(filters.regex("🔑 Ввести ключ доступа"))
-async def enter_key_prompt(c, m):
-    user_id = m.from_user.id
-    logger.info(f"Пользователь {user_id} нажал кнопку ввода ключа")
-    
-    if check_access(user_id):
-        return await m.reply(
-            "✅ У вас уже есть активный доступ!\n"
-            "Используйте /start для входа в личный кабинет.",
-            reply_markup=get_user_main_keyboard(user_id)
-        )
-    
-    temp_auth[user_id] = {"step": "enter_key", "user_id": user_id}
-    logger.info(f"Установлен шаг enter_key для пользователя {user_id}")
-    
-    await m.reply(
-        "🔑 Пожалуйста, введите ваш одноразовый ключ доступа:\n\n"
-        "Форматы:\n"
-        "• KEY123 - обычный ключ\n"
-        "• KEY123-@username - ключ для конкретного пользователя",
-        reply_markup=ReplyKeyboardMarkup([["🔙 Отмена"]], resize_keyboard=True)
-    )
-
-@bot.on_message(filters.regex("🔙 Отмена"))
-async def cancel_input(c, m):
-    user_id = m.from_user.id
-    logger.info(f"Пользователь {user_id} отменил ввод")
-    
-    if user_id in temp_auth:
-        temp_auth.pop(user_id)
-    
-    await m.reply(
-        "❌ Ввод отменен.\n"
-        "Используйте /start для возврата в главное меню.",
-        reply_markup=ReplyKeyboardMarkup([["🔑 Ввести ключ доступа"]], resize_keyboard=True)
-    )
+        # Просто запрашиваем ключ без лишних сообщений и кнопок
+        temp_auth[user_id] = {"step": "enter_key", "user_id": user_id}
+        logger.info(f"Установлен шаг enter_key для пользователя {user_id}")
+        
+        await m.reply("🔑 Введите ключ доступа:")
 
 @bot.on_message(filters.text & filters.private)
 async def handle_all_messages(c, m):
@@ -666,9 +626,6 @@ async def handle_all_messages(c, m):
         elif step == "confirm_interval":
             await handle_interval_confirm(c, m)
             return
-        elif step == "bind_key":
-            await handle_bind_key(c, m)
-            return
     
     # Если пользователь не в режиме ввода, проверяем команды из меню
     await handle_menu_commands(c, m)
@@ -681,7 +638,7 @@ async def handle_key_input(c, m):
     
     logger.info(f"Пользователь {user_id} ввел ключ: {raw_key}")
     
-    # Парсим ключ и username
+    # Парсим ключ и username (если есть привязка в формате ключ-@username)
     key, bound_username = parse_key_with_username(raw_key)
     
     # Загружаем актуальные ключи
@@ -694,6 +651,8 @@ async def handle_key_input(c, m):
         if not can_use:
             await m.reply(message)
             logger.info(f"❌ Ключ {key} отклонен для {user_id}: {message}")
+            # Удаляем пользователя из временных данных после неудачной попытки
+            temp_auth.pop(user_id, None)
             return
         
         # Проверяем, не использован ли ключ
@@ -703,12 +662,14 @@ async def handle_key_input(c, m):
                 key_used = True
                 if uid == user_id:
                     await m.reply("❌ Вы уже использовали этот ключ!")
+                    temp_auth.pop(user_id, None)
                     return
                 break
         
         if key_used:
             await m.reply("❌ Этот ключ уже был использован другим пользователем!")
             logger.info(f"Ключ {key} уже использован")
+            temp_auth.pop(user_id, None)
         else:
             owner = current_keys[key]
             
@@ -752,38 +713,8 @@ async def handle_key_input(c, m):
     else:
         await m.reply("❌ Неверный ключ доступа!")
         logger.info(f"Неверный ключ: {key}")
-
-async def handle_bind_key(c, m):
-    """Обработка привязки ключа к пользователю"""
-    user_id = m.from_user.id
-    data = temp_auth[user_id]
-    
-    text = m.text.strip()
-    
-    # Проверяем формат
-    key, username = parse_key_with_username(text)
-    
-    if not username:
-        await m.reply("❌ Неверный формат! Используйте: ключ-@username\nНапример: KEY123-@durov")
-        return
-    
-    # Загружаем текущие ключи
-    current_keys = load_keys()
-    
-    # Добавляем или обновляем ключ
-    current_keys[key] = f"@{username}"
-    
-    if save_keys(current_keys):
-        await m.reply(
-            f"✅ Ключ успешно привязан!\n\n"
-            f"🔑 Ключ: {key}\n"
-            f"👤 Привязан к: @{username}\n\n"
-            f"Теперь этот ключ может использовать только пользователь @{username}"
-        )
-    else:
-        await m.reply("❌ Ошибка при сохранении ключа")
-    
-    temp_auth.pop(user_id)
+        # Удаляем пользователя из временных данных после неудачной попытки
+        temp_auth.pop(user_id, None)
 
 async def handle_phone_input(c, m):
     """Обработка ввода номера телефона"""
@@ -1069,25 +1000,7 @@ async def handle_menu_commands(c, m):
                 status = "❌" if used else "✅"
                 keys_list += f"{status} {display_key} - {owner}{bound_to}{used_by}\n"
             
-            keys_list += "\n\n📝 Команды:\n"
-            keys_list += "• Обычный ключ: просто ключ\n"
-            keys_list += "• Привязанный ключ: ключ-@username\n"
-            keys_list += "Нажмите кнопку ниже для привязки ключа"
-            
-            await m.reply(
-                keys_list,
-                reply_markup=ReplyKeyboardMarkup([["🔗 Привязать ключ к юзеру", "🔙 Назад"]], resize_keyboard=True)
-            )
-        
-        elif text == "🔗 Привязать ключ к юзеру":
-            temp_auth[user_id] = {"step": "bind_key", "user_id": user_id}
-            await m.reply(
-                "🔗 Введите ключ и username в формате:\n"
-                "`ключ-@username`\n\n"
-                "Например: `KEY123-@durov`\n\n"
-                "Этот ключ сможет использовать только пользователь с username @durov",
-                reply_markup=ReplyKeyboardMarkup([["🔙 Отмена"]], resize_keyboard=True)
-            )
+            await m.reply(keys_list)
         
         elif text == "👥 Все пользователи":
             if not users_data:
