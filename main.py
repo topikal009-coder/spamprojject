@@ -1266,4 +1266,5 @@ if __name__ == "__main__":
         loop.run_until_complete(shutdown())
     except Exception as e:
         logger.error(f"❌ Критическая ошибка: {e}")
+
         loop.run_until_complete(shutdown())
